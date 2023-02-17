@@ -38,8 +38,6 @@ from office365_consts import *
 from process_email import ProcessEmail
 
 TC_FILE = "oauth_task.out"
-SERVER_TOKEN_URL = "https://login.microsoftonline.com/{0}/oauth2/v2.0/token"
-MSGRAPH_API_URL = "https://graph.microsoft.com/v1.0"
 MAX_END_OFFSET_VAL = 2147483646
 
 
@@ -395,6 +393,8 @@ class Office365Connector(BaseConnector):
         # Do note that the app json defines the asset config, so please
         # modify this as you deem fit.
         self._base_url = None
+        self._token_url = None
+        self._region = None
         self._tenant = None
         self._client_id = None
         self._client_secret = None
@@ -688,7 +688,7 @@ class Office365Connector(BaseConnector):
         if nextLink:
             url = nextLink
         else:
-            url = "{0}{1}".format(MSGRAPH_API_URL, endpoint)
+            url = "{0}{1}".format(self._base_url, endpoint)
 
         if headers is None:
             headers = {}
@@ -1158,6 +1158,7 @@ class Office365Connector(BaseConnector):
         if not self._admin_access or not self._admin_consent:
 
             self.save_progress("Getting App REST endpoint URL")
+            self.save_progress(f"Region: {self._region}, Graph API: {self._base_url}, Token: {self._token_url}")
 
             # Get the URL to the app's REST Endpoint, this is the url that the TC dialog
             # box will ask the user to connect to
@@ -1176,10 +1177,14 @@ class Office365Connector(BaseConnector):
 
             self.save_progress("Using OAuth Redirect URL as:")
             self.save_progress(redirect_uri)
+            
+            admin_consent_tld = "com"
+            if (self._region == "US Gov"):
+                admin_consent_tld = "us"
 
             if self._admin_access:
                 # Create the url for fetching administrator consent
-                admin_consent_url = "https://login.microsoftonline.com/{0}/adminconsent".format(self._tenant)
+                admin_consent_url = "https://login.microsoftonline.{0}/{1}/adminconsent".format(admin_consent_tld, self._tenant)
                 admin_consent_url += "?client_id={0}".format(self._client_id)
                 admin_consent_url += "&redirect_uri={0}".format(redirect_uri)
                 admin_consent_url += "&state={0}".format(self._asset_id)
@@ -1188,7 +1193,7 @@ class Office365Connector(BaseConnector):
                 if not self._scope:
                     return action_result.set_status(phantom.APP_ERROR, "Please provide scope for non-admin access in the asset configuration")
                 # Create the url authorization, this is the one pointing to the oauth server side
-                admin_consent_url = "https://login.microsoftonline.com/{0}/oauth2/v2.0/authorize".format(self._tenant)
+                admin_consent_url = "https://login.microsoftonline.{0}/{1}/oauth2/v2.0/authorize".format(admin_consent_tld, self._tenant)
                 admin_consent_url += "?client_id={0}".format(self._client_id)
                 admin_consent_url += "&redirect_uri={0}".format(redirect_uri)
                 admin_consent_url += "&state={0}".format(self._asset_id)
@@ -2452,7 +2457,7 @@ class Office365Connector(BaseConnector):
 
     def _get_token(self, action_result):
 
-        req_url = SERVER_TOKEN_URL.format(self._tenant)
+        req_url = self._token_url.format(self._tenant)
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
@@ -2466,7 +2471,10 @@ class Office365Connector(BaseConnector):
         if not self._admin_access:
             data['scope'] = 'offline_access ' + self._scope
         else:
-            data['scope'] = 'https://graph.microsoft.com/.default'
+            if (self._region == "US Gov"):
+                data['scope'] = 'https://graph.microsoft.us/.default'
+            else:
+                data['scope'] = 'https://graph.microsoft.com/.default'
 
         if not self._admin_access:
             if self._refresh_token:
@@ -2544,7 +2552,10 @@ class Office365Connector(BaseConnector):
             self.debug_print(MSGOFFICE365_STATE_FILE_CORRUPT_ERR)
             self._reset_state_file()
             return self.set_status(phantom.APP_ERROR, MSGOFFICE365_STATE_FILE_CORRUPT_ERR)
-
+       
+        self._region = config.get("region", "Global")
+        self._base_url = MSGOFFICE365_API_URLS[self._region]
+        self._token_url = MSGOFFICE365_SERVER_TOKEN_URLS[self._region]
         self._tenant = config['tenant']
         self._client_id = config['client_id']
         self._client_secret = config['client_secret']

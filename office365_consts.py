@@ -13,6 +13,17 @@
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
 TC_STATUS_SLEEP = 2
+
+MSGOFFICE365_API_URLS = {
+    "Global": "https://graph.microsoft.com/v1.0",
+    "US Gov": "https://graph.microsoft.us/v1.0"
+}
+
+MSGOFFICE365_SERVER_TOKEN_URLS = {
+    "Global": "https://login.microsoftonline.com/{0}/oauth2/v2.0/token",
+    "US Gov": "https://login.microsoftonline.us/{0}/oauth2/v2.0/token"
+}
+
 MSGOFFICE365_PER_PAGE_COUNT = 999
 SPLUNK_SOAR_SYS_INFO_URL = "{url}rest/system_info"
 SPLUNK_SOAR_ASSET_INFO_URL = "{url}rest/asset/{asset_id}"
